@@ -1,0 +1,37 @@
+name: tansik-watch
+
+on:
+  schedule:
+    - cron: "2-57/5 * * * *"   # every 5 min, offset from the top of the hour (GitHub is busiest then)
+  workflow_dispatch:            # lets you press "Run workflow" manually to test
+
+permissions:
+  actions: write                # needed so the job can switch itself off after alerting you
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Check the page
+        id: check
+        env:
+          TANSIK_URL: ${{ secrets.TANSIK_URL }}
+          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+        run: python tansik_watcher.py --once
+
+      - name: Stop watching after the alert was sent
+        if: steps.check.outputs.notified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow disable watch.yml --repo "$GITHUB_REPOSITORY"
